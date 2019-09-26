@@ -1,0 +1,821 @@
+heat_template_version: 2017-02-24
+description: >
+  This template deploys Mariadb replica set on Ubuntu for JAWS
+parameters:
+  image:
+    type: string
+    default: Ubuntu1604_NEW
+    description: The Ubuntu image to use.
+  flavor:
+    type: string
+    default: m1.large
+    description: The JAWS flavour database server is to run on
+  key:
+    type: string
+    default: mk
+    description: Name of an existing KeyPair to enable SSH access to the instances
+  public_network_id:
+    type: string
+    default: non-prod
+  stack_name:
+    type: string
+    description: Prefix to add to all resources
+    default: mariadb
+  network_name:
+    type: string
+    label: private network to be used
+    default: mohan-network
+  subnet_name:
+    type: string
+    label: private network's subnet to be used
+    default: mohan2
+  volume_size:
+    type: number
+    description: Database volume size
+    default: 20
+  volume_type:
+    type: string
+    description: Volume type
+    default: ceph
+  proxy_host:
+    type: string
+    description: Proxy host for this environment
+    default: 10.157.240.254
+  proxy_port:
+    type: number
+    description: Proxy time for this environment
+    default: 8678
+  db_pass:
+    type: string
+    description: Password for root user
+    default: password
+    hidden: true
+  custom_db:
+    type: string
+    description: Database to be created
+    default: app
+  commandLog:
+    type: boolean
+    default: True
+  isprodvm:
+    type: string
+    default: non-prod
+  az1:
+    type: string
+    description: AZ to be used for node1
+    default: JMNG-PE3-PROD1
+  az2:
+    type: string
+    description: AZ to be used for node2
+    default: JMNG-PE3-PROD2
+  az3:
+    type: string
+    description: AZ to be used for node3
+    default: JMNG-PE3-PROD3
+
+resources:
+  random_string1:
+      type: OS::Heat::RandomString
+      properties:
+          length: 4
+          sequence: lowercase
+  random_string2:
+      type: OS::Heat::RandomString
+      properties:
+          length: 4
+          sequence: lowercase
+  random_string3:
+      type: OS::Heat::RandomString
+      properties:
+          length: 4
+          sequence: lowercase
+  maria1_name:
+      type: OS::Heat::Value
+      depends_on: random_string1
+      properties:
+          value:
+              str_replace:
+                  template: dbaas-$prefix-$random
+                  params:
+                      $prefix: { get_param: stack_name }
+                      $random: { get_resource: random_string1 }
+
+  maria2_name:
+      type: OS::Heat::Value
+      depends_on: random_string2
+      properties:
+          value:
+              str_replace:
+                  template: dbaas-$prefix-$random
+                  params:
+                      $prefix: { get_param: stack_name }
+                      $random: { get_resource: random_string2 }
+  maria3_name:
+      type: OS::Heat::Value
+      depends_on: random_string3
+      properties:
+          value:
+              str_replace:
+                  template: dbaas-$prefix-$random
+                  params:
+                      $prefix: { get_param: stack_name }
+                      $random: { get_resource: random_string3 }
+
+  random_string_maria:
+      type: OS::Heat::RandomString
+      properties:
+          length: 10
+          sequence: lowercase
+  random_string_sg:
+      type: OS::Heat::RandomString
+      properties:
+          length: 4
+          sequence: lowercase
+  security_group:
+      type: OS::Neutron::SecurityGroup
+      depends_on: random_string1
+      properties:
+          name:
+              str_replace:
+                  template: $prefix-$random
+                  params:
+                      $prefix: { get_param: stack_name }
+                      $random: { get_resource: random_string_sg }
+          rules:
+              - remote_mode: remote_group_id
+                direction: ingress
+              - remote_mode: remote_group_id
+                direction: egress
+              - direction: egress
+              - protocol: icmp
+              - port_range_min: 22
+                port_range_max: 22
+                protocol: tcp
+              - port_range_min: 3306
+                port_range_max: 3306
+                protocol: tcp
+
+  port1:
+      type: OS::Neutron::Port
+      depends_on: security_group
+      properties:
+          admin_state_up: true
+          network: { get_param: network_name }
+          fixed_ips:
+            - subnet_id: { get_param: subnet_name }
+          security_groups:
+            - { get_resource: security_group }
+  port2:
+      type: OS::Neutron::Port
+      depends_on: security_group
+      properties:
+          admin_state_up: true
+          network: { get_param: network_name }
+          fixed_ips:
+            - subnet_id: { get_param: subnet_name }
+          security_groups:
+            - { get_resource: security_group }
+  port3:
+      type: OS::Neutron::Port
+      depends_on: security_group
+      properties:
+          admin_state_up: true
+          network: { get_param: network_name }
+          fixed_ips:
+            - subnet_id: { get_param: subnet_name }
+          security_groups:
+            - { get_resource: security_group }
+  port4:
+      type: OS::Neutron::Port
+      depends_on: security_group
+      properties:
+          admin_state_up: true
+          network: { get_param: network_name }
+          fixed_ips:
+            - subnet_id: { get_param: subnet_name }
+          security_groups:
+            - { get_resource: security_group }
+
+  maria1_floatingip:
+      type: OS::Neutron::FloatingIP
+      depends_on: port1
+      properties:
+          floating_network_id: { get_param: public_network_id }
+          port_id: { get_resource: port1 }
+
+  maria2_floatingip:
+      type: OS::Neutron::FloatingIP
+      depends_on: port2
+      properties:
+          floating_network_id: { get_param: public_network_id }
+          port_id: { get_resource: port2 }
+
+  maria3_floatingip:
+      type: OS::Neutron::FloatingIP
+      depends_on: port3
+      properties:
+          floating_network_id: { get_param: public_network_id }
+          port_id: { get_resource: port3 }
+
+  maria4_floatingip:
+      type: OS::Neutron::FloatingIP
+      depends_on: port4
+      properties:
+          floating_network_id: { get_param: public_network_id }
+          port_id: { get_resource: port4 }
+
+  maria1_volume:
+      type: OS::Cinder::Volume
+      properties:
+          image: { get_param: image }
+          name: { get_attr: [maria1_name, value] }
+          size: { get_param: volume_size }
+          volume_type: { get_param: volume_type }
+  maria2_volume:
+      type: OS::Cinder::Volume
+      properties:
+          image: { get_param: image }
+          name: { get_attr: [maria2_name, value] }
+          size: { get_param: volume_size }
+          volume_type: { get_param: volume_type }
+  maria3_volume:
+      type: OS::Cinder::Volume
+      properties:
+          image: { get_param: image }
+          name: { get_attr: [maria3_name, value] }
+          size: { get_param: volume_size }
+          volume_type: { get_param: volume_type }
+  maria1:
+    type: OS::Nova::Server
+    depends_on: port1
+    properties:
+      name: { get_attr: [maria1_name, value] }
+      flavor: { get_param: flavor }
+      key_name: { get_param: key }
+      availability_zone: { get_param: az1 }
+      block_device_mapping_v2:
+        - device_name: vda
+          volume_id: { get_resource: maria1_volume }
+          delete_on_termination: True
+      networks:
+        - port: { get_resource: port1 }
+      user_data_format: RAW
+      metadata: { db_instance: true }
+      user_data:
+        str_replace:
+          params:
+            $key: { get_resource: random_string_maria }
+            $proxy_host: { get_param: proxy_host }
+            $proxy_port: { get_param: proxy_port }
+            $commandLog: { get_param: commandLog }
+            $isprodvm: { get_param: isprodvm }
+            #$container_url: { get_attr: [swift_container_backup, WebsiteURL] }
+            $custom_db: { get_param: custom_db }
+            $db_pass: { get_param: db_pass }
+            $ip1: { get_attr: [ port1, fixed_ips, 0, ip_address ]}
+            $ip2: { get_attr: [ port2, fixed_ips, 0, ip_address ]}
+            $ip3: { get_attr: [ port3, fixed_ips, 0, ip_address ]}
+            $name1: { get_attr: [maria1_name, value] }
+            $name2: { get_attr: [maria2_name, value] }
+            $name3: { get_attr: [maria3_name, value] }
+          template: |
+            #!/bin/bash
+            sudo -i
+            echo "starting my script.." >> /tmp/start
+            cat /dev/null > /etc/apt/sources.list
+            cat <<EOF>> /etc/apt/sources.list
+            #------------------------------------------------------------------------------#
+            #                            OFFICIAL UBUNTU REPOS                             #
+            #------------------------------------------------------------------------------#
+
+
+            ###### Ubuntu Main Repos
+            deb http://in.archive.ubuntu.com/ubuntu/ xenial main restricted universe multiverse
+            deb-src http://in.archive.ubuntu.com/ubuntu/ xenial main restricted universe multiverse
+
+            ###### Ubuntu Update Repos
+            deb http://in.archive.ubuntu.com/ubuntu/ xenial-security main restricted universe multiverse
+            deb http://in.archive.ubuntu.com/ubuntu/ xenial-updates main restricted universe multiverse
+            deb-src http://in.archive.ubuntu.com/ubuntu/ xenial-security main restricted universe multiverse
+            deb-src http://in.archive.ubuntu.com/ubuntu/ xenial-updates main restricted universe multiverse
+            EOF
+            export http_proxy=http://$proxy_host:$proxy_port
+            export https_proxy=http://$proxy_host:$proxy_port
+            cat /dev/null > /etc/profile.d/proxy.sh
+            cat <<EOF>> /etc/profile.d/proxy.sh
+            export http_proxy=http://$proxy_host:$proxy_port
+            export https_proxy=http://$proxy_host:$proxy_port
+            export no_proxy=$ip1,$ip2,$ip3
+            export DEBIAN_FRONTEND=noninteractive
+            EOF
+            # Snoopy install
+            if [ $commandLog = True ]
+            then
+               apt-get update -y
+               apt-get install libtool-bin -y
+               rm -f snoopy-install.sh
+               curl -L -o snoopy-install.sh https://github.com/a2o/snoopy/raw/install/doc/install/bin/snoopy-install.sh
+               chmod 755 snoopy-install.sh
+               ./snoopy-install.sh git-master
+               chmod -R 755 /var/log/auth.log
+               snoopy-enable
+            else
+              echo "snoopy not installed"
+            fi
+            echo "$ip1  $name1" >> /etc/hosts
+            echo "$ip2  $name2" >> /etc/hosts
+            echo "$ip3  $name3" >> /etc/hosts
+            apt-get update -y
+            #apt-get --yes --force-yes -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" upgrade
+            apt-get install python-pip apt-transport-https ca-certificates curl software-properties-common python-software-properties -y
+            apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
+            apt-get -y install software-properties-common python-software-properties
+            add-apt-repository 'deb [arch=amd64,i386,ppc64el] http://mirror.jaleco.com/mariadb/repo/10.1/ubuntu xenial main'
+            apt-get -y update
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get --yes --force-yes -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" install mariadb-server
+            apt-get -y install rsync
+            mysql -u root -e "SET PASSWORD FOR root@'localhost' = PASSWORD('$db_pass');"
+            cat <<EOF>> /etc/mysql/conf.d/galera-cluster.cnf
+            [mysqld]
+            binlog_format=ROW
+            default-storage-engine=innodb
+            innodb_autoinc_lock_mode=2
+            bind-address=0.0.0.0
+            # Galera Provider Configuration
+            wsrep_on=ON
+            wsrep_provider=/usr/lib/galera/libgalera_smm.so
+            # Galera Cluster Configuration
+            wsrep_cluster_name="galera_cluster"
+            wsrep_cluster_address="gcomm://$ip1,$ip2,$ip3"
+
+            # Galera Synchronization Configuration
+            wsrep_sst_method=rsync
+
+            # Galera Node Configuration
+            wsrep_node_address="$ip1"
+            wsrep_node_name="$name1"
+            EOF
+            # grant access all remote connection
+            mysql -u root -p$db_pass -e "GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' IDENTIFIED BY '$db_pass' with grant option;"
+            mysql -u root -p$db_pass -e "FLUSH PRIVILEGES;"
+            mysql -u root -p$db_pass -e "CREATE DATABASE $custom_db;"
+
+            systemctl stop mariadb
+            # Installing Telegraf agent
+            curl -L -O https://dl.influxdata.com/telegraf/releases/telegraf_1.10.3-1_amd64.deb
+            dpkg -i telegraf_1.10.3-1_amd64.deb
+
+
+            # Telegraf Configuration
+            curl -L -o jq https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64
+            chmod +x ./jq
+            mv jq /usr/bin
+            echo "serverid=$(sudo curl GET  -s 'http://169.254.169.254/openstack/latest/meta_data.json' |jq -r '.uuid' )" >> /etc/default/telegraf
+
+            mv /etc/telegraf/telegraf.conf /etc/telegraf/telegraf-orig.conf
+            if [ $isprodvm = "non-prod" ]
+            then
+              curl -o /etc/telegraf/telegraf.conf https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/telegraf_nonprod.conf
+            else
+              curl -o /etc/telegraf/telegraf.conf https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/telegraf_prod.conf
+            fi
+            curl -o /etc/telegraf/longrunning.sh https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/longrunning.sh
+            curl -o /etc/telegraf/commands.sh https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/commands.sh
+
+            systemctl enable telegraf
+            systemctl restart telegraf
+            cd /root
+            cat <<EOF>> sample_test.txt
+            webserver test content
+            EOF
+            python -m SimpleHTTPServer 8000 &
+            galera_new_cluster
+  maria2:
+    type: OS::Nova::Server
+    depends_on: [ port2, maria1]
+    properties:
+      name: { get_attr: [maria2_name, value] }
+      flavor: { get_param: flavor }
+      key_name: { get_param: key }
+      availability_zone: { get_param: az2 }
+      block_device_mapping_v2:
+        - device_name: vda
+          volume_id: { get_resource: maria2_volume }
+          delete_on_termination: True
+      networks:
+        - port: { get_resource: port2 }
+      user_data_format: RAW
+      metadata: { db_instance: true }
+      user_data:
+        str_replace:
+          params:
+            $key: { get_resource: random_string_maria }
+            $proxy_host: { get_param: proxy_host }
+            $proxy_port: { get_param: proxy_port }
+            $db_pass: { get_param: db_pass }
+            $ip1: { get_attr: [ port1, fixed_ips, 0, ip_address ]}
+            $ip2: { get_attr: [ port2, fixed_ips, 0, ip_address ]}
+            $ip3: { get_attr: [ port3, fixed_ips, 0, ip_address ]}
+            $name1: { get_attr: [maria1_name, value] }
+            $name2: { get_attr: [maria2_name, value] }
+            $name3: { get_attr: [maria3_name, value] }
+          template: |
+            #!/bin/bash
+            echo "starting my script.." >> /tmp/start
+            cat /dev/null > /etc/apt/sources.list
+            cat <<EOF>> /etc/apt/sources.list
+            #------------------------------------------------------------------------------#
+            #                            OFFICIAL UBUNTU REPOS                             #
+            #------------------------------------------------------------------------------#
+
+
+            ###### Ubuntu Main Repos
+            deb http://in.archive.ubuntu.com/ubuntu/ xenial main restricted universe multiverse
+            deb-src http://in.archive.ubuntu.com/ubuntu/ xenial main restricted universe multiverse
+
+            ###### Ubuntu Update Repos
+            deb http://in.archive.ubuntu.com/ubuntu/ xenial-security main restricted universe multiverse
+            deb http://in.archive.ubuntu.com/ubuntu/ xenial-updates main restricted universe multiverse
+            deb-src http://in.archive.ubuntu.com/ubuntu/ xenial-security main restricted universe multiverse
+            deb-src http://in.archive.ubuntu.com/ubuntu/ xenial-updates main restricted universe multiverse
+            EOF
+            export http_proxy=http://$proxy_host:$proxy_port
+            export https_proxy=http://$proxy_host:$proxy_port
+            cat /dev/null > /etc/profile.d/proxy.sh
+            cat <<EOF>> /etc/profile.d/proxy.sh
+            export http_proxy=http://$proxy_host:$proxy_port
+            export https_proxy=http://$proxy_host:$proxy_port
+            export no_proxy=$ip1,$ip2,$ip3
+            export DEBIAN_FRONTEND=noninteractive
+            EOF
+            # Snoopy install
+            if [ $commandLog = True ]
+            then
+               apt-get update -y
+               apt-get install libtool-bin -y
+               rm -f snoopy-install.sh
+               curl -L -o snoopy-install.sh https://github.com/a2o/snoopy/raw/install/doc/install/bin/snoopy-install.sh
+               chmod 755 snoopy-install.sh
+               ./snoopy-install.sh git-master
+               chmod -R 755 /var/log/auth.log
+               snoopy-enable
+            else
+              echo "snoopy not installed"
+            fi
+            echo "$ip1  $name1" >> /etc/hosts
+            echo "$ip2  $name2" >> /etc/hosts
+            echo "$ip3  $name3" >> /etc/hosts
+            apt-get update -y
+            #apt-get --yes --force-yes -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" upgrade
+            apt-get install python-pip apt-transport-https ca-certificates curl software-properties-common python-software-properties -y
+            apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
+            apt-get -y install software-properties-common python-software-properties
+            add-apt-repository 'deb [arch=amd64,i386,ppc64el] http://mirror.jaleco.com/mariadb/repo/10.1/ubuntu xenial main'
+            apt-get -y update
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get --yes --force-yes -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" install mariadb-server
+            apt-get -y install rsync
+            mysql -u root -e "SET PASSWORD FOR root@'localhost' = PASSWORD('$db_pass');"
+            cat <<EOF>> /etc/mysql/conf.d/galera-cluster.cnf
+            [mysqld]
+            binlog_format=ROW
+            default-storage-engine=innodb
+            innodb_autoinc_lock_mode=2
+            bind-address=0.0.0.0
+            # Galera Provider Configuration
+            wsrep_on=ON
+            wsrep_provider=/usr/lib/galera/libgalera_smm.so
+            # Galera Cluster Configuration
+            wsrep_cluster_name="galera_cluster"
+            wsrep_cluster_address="gcomm://$ip1,$ip2,$ip3"
+
+            # Galera Synchronization Configuration
+            wsrep_sst_method=rsync
+
+            # Galera Node Configuration
+            wsrep_node_address="$ip2"
+            wsrep_node_name="$name2"
+            EOF
+
+            # grant access all remote connection
+            mysql -u root -p$db_pass -e "GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' IDENTIFIED BY '$db_pass' with grant option;"
+            mysql -u root -p$db_pass -e "FLUSH PRIVILEGES;"
+
+            # Installing Telegraf agent
+            curl -L -O https://dl.influxdata.com/telegraf/releases/telegraf_1.10.3-1_amd64.deb
+            dpkg -i telegraf_1.10.3-1_amd64.deb
+
+
+            # Telegraf Configuration
+            curl -L -o jq https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64
+            chmod +x ./jq
+            mv jq /usr/bin
+            echo "serverid=$(sudo curl GET  -s 'http://169.254.169.254/openstack/latest/meta_data.json' |jq -r '.uuid' )" >> /etc/default/telegraf
+
+            mv /etc/telegraf/telegraf.conf /etc/telegraf/telegraf-orig.conf
+            if [ $isprodvm = "non-prod" ]
+            then
+              curl -o /etc/telegraf/telegraf.conf https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/telegraf_nonprod.conf
+            else
+              curl -o /etc/telegraf/telegraf.conf https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/telegraf_prod.conf
+            fi
+            curl -o /etc/telegraf/longrunning.sh https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/longrunning.sh
+            curl -o /etc/telegraf/commands.sh https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/commands.sh
+
+            systemctl enable telegraf
+            systemctl restart telegraf
+            unset http_proxy && unset https_proxy
+            until curl  -s $ip1:8000/sample_test.txt --output /root/sample_test.txt; do sleep 2; done
+            systemctl restart mariadb
+  maria3:
+    type: OS::Nova::Server
+    #depends_on: port3
+    depends_on: [ port3, maria1, maria2 ]
+    properties:
+      name: { get_attr: [maria3_name, value] }
+      flavor: { get_param: flavor }
+      key_name: { get_param: key }
+      availability_zone: { get_param: az3 }
+      block_device_mapping_v2:
+        - device_name: vda
+          volume_id: { get_resource: maria3_volume }
+          delete_on_termination: True
+      networks:
+        - port: { get_resource: port3 }
+      user_data_format: RAW
+      user_data:
+        str_replace:
+          params:
+            $key: { get_resource: random_string_maria }
+            $proxy_host: { get_param: proxy_host }
+            $proxy_port: { get_param: proxy_port }
+            $db_pass: { get_param: db_pass }
+            $ip1: { get_attr: [ port1, fixed_ips, 0, ip_address ]}
+            $ip2: { get_attr: [ port2, fixed_ips, 0, ip_address ]}
+            $ip3: { get_attr: [ port3, fixed_ips, 0, ip_address ]}
+            $name1: { get_attr: [maria1_name, value] }
+            $name2: { get_attr: [maria2_name, value] }
+            $name3: { get_attr: [maria3_name, value] }
+          template: |
+            #!/bin/bash
+            echo "starting my script.." >> /tmp/start
+            cat /dev/null > /etc/apt/sources.list
+            cat <<EOF>> /etc/apt/sources.list
+            #------------------------------------------------------------------------------#
+            #                            OFFICIAL UBUNTU REPOS                             #
+            #------------------------------------------------------------------------------#
+
+
+            ###### Ubuntu Main Repos
+            deb http://in.archive.ubuntu.com/ubuntu/ xenial main restricted universe multiverse
+            deb-src http://in.archive.ubuntu.com/ubuntu/ xenial main restricted universe multiverse
+
+            ###### Ubuntu Update Repos
+            deb http://in.archive.ubuntu.com/ubuntu/ xenial-security main restricted universe multiverse
+            deb http://in.archive.ubuntu.com/ubuntu/ xenial-updates main restricted universe multiverse
+            deb-src http://in.archive.ubuntu.com/ubuntu/ xenial-security main restricted universe multiverse
+            deb-src http://in.archive.ubuntu.com/ubuntu/ xenial-updates main restricted universe multiverse
+            EOF
+            export http_proxy=http://$proxy_host:$proxy_port
+            export https_proxy=http://$proxy_host:$proxy_port
+            cat /dev/null > /etc/profile.d/proxy.sh
+            cat <<EOF>> /etc/profile.d/proxy.sh
+            export http_proxy=http://$proxy_host:$proxy_port
+            export https_proxy=http://$proxy_host:$proxy_port
+            export no_proxy=$ip1,$ip2,$ip3
+            export DEBIAN_FRONTEND=noninteractive
+            EOF
+
+            # Snoopy install
+            if [ $commandLog = True ]
+            then
+               apt-get update -y
+               apt-get install libtool-bin -y
+               rm -f snoopy-install.sh
+               curl -L -o snoopy-install.sh https://github.com/a2o/snoopy/raw/install/doc/install/bin/snoopy-install.sh
+               chmod 755 snoopy-install.sh
+               ./snoopy-install.sh git-master
+               chmod -R 755 /var/log/auth.log
+               snoopy-enable
+            else
+              echo "snoopy not installed"
+            fi
+            echo "$ip1  $name1" >> /etc/hosts
+            echo "$ip2  $name2" >> /etc/hosts
+            echo "$ip3  $name3" >> /etc/hosts
+            apt-get update -y
+            #apt-get --yes --force-yes -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" upgrade
+            apt-get install python-pip apt-transport-https ca-certificates curl software-properties-common python-software-properties -y
+            apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
+            apt-get -y install software-properties-common python-software-properties
+            add-apt-repository 'deb [arch=amd64,i386,ppc64el] http://mirror.jaleco.com/mariadb/repo/10.1/ubuntu xenial main'
+            apt-get -y update
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get --yes --force-yes -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" install mariadb-server
+            apt-get -y install rsync
+            mysql -u root -e "SET PASSWORD FOR root@'localhost' = PASSWORD('$db_pass');"
+            cat <<EOF>> /etc/mysql/conf.d/galera-cluster.cnf
+            [mysqld]
+            binlog_format=ROW
+            default-storage-engine=innodb
+            innodb_autoinc_lock_mode=2
+            bind-address=0.0.0.0
+            # Galera Provider Configuration
+            wsrep_on=ON
+            wsrep_provider=/usr/lib/galera/libgalera_smm.so
+            # Galera Cluster Configuration
+            wsrep_cluster_name="galera_cluster"
+            wsrep_cluster_address="gcomm://$ip1,$ip2,$ip3"
+
+            # Galera Synchronization Configuration
+            wsrep_sst_method=rsync
+
+            # Galera Node Configuration
+            wsrep_node_address="$ip3"
+            wsrep_node_name="$name3"
+            EOF
+
+            # grant access all remote connection
+            mysql -u root -p$db_pass -e "GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' IDENTIFIED BY '$db_pass' with grant option;"
+            mysql -u root -p$db_pass -e "FLUSH PRIVILEGES;"
+
+            # Installing Telegraf agent
+            curl -L -O https://dl.influxdata.com/telegraf/releases/telegraf_1.10.3-1_amd64.deb
+            dpkg -i telegraf_1.10.3-1_amd64.deb
+
+
+            # Telegraf Configuration
+            curl -L -o jq https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64
+            chmod +x ./jq
+            mv jq /usr/bin
+            echo "serverid=$(sudo curl GET  -s 'http://169.254.169.254/openstack/latest/meta_data.json' |jq -r '.uuid' )" >> /etc/default/telegraf
+
+            mv /etc/telegraf/telegraf.conf /etc/telegraf/telegraf-orig.conf
+            if [ $isprodvm = "non-prod" ]
+            then
+              curl -o /etc/telegraf/telegraf.conf https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/telegraf_nonprod.conf
+            else
+              curl -o /etc/telegraf/telegraf.conf https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/telegraf_prod.conf
+            fi
+            curl -o /etc/telegraf/longrunning.sh https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/longrunning.sh
+            curl -o /etc/telegraf/commands.sh https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/commands.sh
+
+            systemctl enable telegraf
+            systemctl restart telegraf
+            unset http_proxy && unset https_proxy
+            until curl  -s $ip1:8000/sample_test.txt --output /root/sample_test.txt; do sleep 2; done
+            systemctl restart mariadb	
+  mariadb_proxy:
+    type: OS::Nova::Server
+    depends_on: port4
+    properties:
+      flavor: { get_param: flavor }
+      key_name: { get_param: key }
+      availability_zone: { get_param: az3 }
+      block_device_mapping_v2:
+        - device_name: vda
+          image: { get_param: image }
+          volume_size: { get_param: volume_size }
+          delete_on_termination: True
+      networks:
+        - port: { get_resource: port4 }
+      user_data_format: RAW
+      user_data:
+        str_replace:
+          params:
+            $proxy_host: { get_param: proxy_host }
+            $proxy_port: { get_param: proxy_port }
+            $commandLog: { get_param: commandLog }
+            $ip1: { get_attr: [ port1, fixed_ips, 0, ip_address ]}
+            $ip2: { get_attr: [ port2, fixed_ips, 0, ip_address ]}
+            $ip3: { get_attr: [ port3, fixed_ips, 0, ip_address ]}
+            $ip4: { get_attr: [ port4, fixed_ips, 0, ip_address ]}
+            $name1: { get_attr: [maria1_name, value] }
+            $name2: { get_attr: [maria2_name, value] }
+            $name3: { get_attr: [maria3_name, value] }
+          template: |
+            #!/bin/bash
+            echo "starting my script.." >> /tmp/start
+            cat /dev/null > /etc/apt/sources.list
+            cat <<EOF>> /etc/apt/sources.list
+            #------------------------------------------------------------------------------#
+            #                            OFFICIAL UBUNTU REPOS                             #
+            #------------------------------------------------------------------------------#
+
+
+            ###### Ubuntu Main Repos
+            deb http://in.archive.ubuntu.com/ubuntu/ xenial main restricted universe multiverse
+            deb-src http://in.archive.ubuntu.com/ubuntu/ xenial main restricted universe multiverse
+
+            ###### Ubuntu Update Repos
+            deb http://in.archive.ubuntu.com/ubuntu/ xenial-security main restricted universe multiverse
+            deb http://in.archive.ubuntu.com/ubuntu/ xenial-updates main restricted universe multiverse
+            deb-src http://in.archive.ubuntu.com/ubuntu/ xenial-security main restricted universe multiverse
+            deb-src http://in.archive.ubuntu.com/ubuntu/ xenial-updates main restricted universe multiverse
+            EOF
+            export http_proxy=http://$proxy_host:$proxy_port
+            export https_proxy=http://$proxy_host:$proxy_port
+            cat /dev/null > /etc/profile.d/proxy.sh
+            cat <<EOF>> /etc/profile.d/proxy.sh
+            export http_proxy=http://$proxy_host:$proxy_port
+            export https_proxy=http://$proxy_host:$proxy_port
+            export no_proxy=$ip1,$ip2,$ip3
+            export DEBIAN_FRONTEND=noninteractive
+            EOF
+            apt-get update -y
+           
+            # Snoopy install
+            if [ $commandLog = True ]
+            then
+               apt-get update -y
+               apt-get install libtool-bin -y
+               rm -f snoopy-install.sh
+               curl -L -o snoopy-install.sh https://github.com/a2o/snoopy/raw/install/doc/install/bin/snoopy-install.sh
+               chmod 755 snoopy-install.sh
+               ./snoopy-install.sh git-master
+               chmod -R 755 /var/log/auth.log
+               snoopy-enable
+            else
+              echo "snoopy not installed"
+            fi
+
+            apt-get install haproxy -y
+            echo "listen MariaDB" >> /etc/haproxy/haproxy.cfg
+            echo "         bind *:3306" >> /etc/haproxy/haproxy.cfg
+            echo "         mode tcp" >> /etc/haproxy/haproxy.cfg
+            echo "         balance source" >> /etc/haproxy/haproxy.cfg
+            echo "         server $name1 $ip1:3306 check inter 10s fastinter 2s downinter 3s rise 3 fall 3" >> /etc/haproxy/haproxy.cfg
+            echo "         server $name2 $ip2:3306 check inter 10s fastinter 2s downinter 3s rise 3 fall 3" >> /etc/haproxy/haproxy.cfg
+            echo "         server $name3 $ip3:3306 check inter 10s fastinter 2s downinter 3s rise 3 fall 3" >> /etc/haproxy/haproxy.cfg
+            systemctl enable haproxy
+            systemctl restart haproxy
+
+            # Installing Telegraf agent
+            curl -L -O https://dl.influxdata.com/telegraf/releases/telegraf_1.10.3-1_amd64.deb
+            dpkg -i telegraf_1.10.3-1_amd64.deb
+
+
+            # Telegraf Configuration
+            curl -L -o jq https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64
+            chmod +x ./jq
+            mv jq /usr/bin
+            echo "serverid=$(sudo curl GET  -s 'http://169.254.169.254/openstack/latest/meta_data.json' |jq -r '.uuid' )" >> /etc/default/telegraf
+
+            mv /etc/telegraf/telegraf.conf /etc/telegraf/telegraf-orig.conf
+            if [ $isprodvm = "non-prod" ]
+            then
+              curl -o /etc/telegraf/telegraf.conf https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/telegraf_nonprod.conf
+            else
+              curl -o /etc/telegraf/telegraf.conf https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/telegraf_prod.conf
+            fi
+            curl -o /etc/telegraf/longrunning.sh https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/longrunning.sh
+            curl -o /etc/telegraf/commands.sh https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/commands.sh
+
+            systemctl enable telegraf
+            systemctl restart telegraf
+
+outputs:
+  db_engine:
+    description: Database engine name
+    value: MariaDB
+  keypair:
+    description: Keypair to connect to Database instances
+    value: { get_param: key }
+  flavor:
+    description: Database instance flavor
+    value: { get_param: flavor }
+  network_name:
+    description: Database network
+    value: { get_param: network_name }
+  subnet_name:
+    description: Database subnet
+    value: { get_param: subnet_name }
+  nodes_pubip:
+    description: Database instance public ip
+    value:
+      str_replace:
+        template: $host1,$host2,$host3
+        params:
+          $host1: { get_attr: [maria1_floatingip, floating_ip_address] }
+          $host2: { get_attr: [maria2_floatingip, floating_ip_address] }
+          $host3: { get_attr: [maria3_floatingip, floating_ip_address] }
+ 
+  nodes_pvtip:
+    description: Database instance private ip
+    value:
+      str_replace:
+        template: $pvtip1,$pvtip2,$pvtip3
+        params:
+          $pvtip1: { get_attr: [port1, fixed_ips, 0, ip_address] }
+          $pvtip2: { get_attr: [port2, fixed_ips, 0, ip_address] }
+          $pvtip3: { get_attr: [port3, fixed_ips, 0, ip_address] } 
+  mariadb_connection_url:
+    description: MariaDB cluster connection url
+    value:
+      str_replace:
+        template: mysql://root:$pass@$proxyhost:3306/$custom_db
+        params:
+          $custom_db: { get_param: custom_db }
+          $pass: { get_param: db_pass }
+          $proxyhost: { get_attr: [maria4_floatingip, floating_ip_address] }

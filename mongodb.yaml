@@ -1,0 +1,634 @@
+heat_template_version: 2017-02-24
+description: >
+  This template deploys MongoDB replica set on Ubuntu for JAWS
+parameters:
+  sync:
+    type: boolean
+    default: False
+  image:
+    type: string
+    default: Ubuntu1604
+    description: The Ubuntu image to use.
+  flavor:
+    type: string
+    default: m1.large
+    description: The JAWS flavour database server is to run on
+  key:
+    type: string
+    default: mj
+    description: Name of an existing KeyPair to enable SSH access to the instances
+  public_network_id:
+    type: string
+    default: non-prod2
+  stack_name:
+    type: string
+    description: Prefix to add to all resources
+    default: mongodb
+  network_name:
+    type: string
+    label: private network to be used
+    default: mj-private-network
+  subnet_name:
+    type: string
+    label: private network's subnet to be used
+    default: mj-private-subnet
+  volume_size:
+    type: number
+    description: Database volume size
+    default: 20
+  volume_type:
+    type: string
+    description: Volume type
+    default: ceph
+  proxy_host:
+    type: string
+    description: Proxy host for this environment
+    default: 10.157.240.254
+  proxy_port:
+    type: number
+    description: Proxy time for this environment
+    default: 8678
+  db_pass:
+    type: string
+    description: Password for root user
+    default: password
+    hidden: true
+  custom_db:
+    type: string
+    description: Database to be created
+    default: app
+  commandLog:
+    type: boolean
+    default: True
+  isprodvm:
+    type: string
+    default: non-prod
+  az1:
+    type: string
+    description: AZ to be used for node1
+    default: JMNG-PE3-PROD1
+  az2:
+    type: string
+    description: AZ to be used for node2
+    default: JMNG-PE3-PROD2
+  az3:
+    type: string
+    description: AZ to be used for node3
+    default: JMNG-PE3-PROD3
+    
+resources:
+  random_string1:
+      type: OS::Heat::RandomString
+      properties:
+          length: 4
+          sequence: lowercase
+          
+  random_string2:
+      type: OS::Heat::RandomString
+      properties:
+          length: 4
+          sequence: lowercase
+          
+  random_string3:
+      type: OS::Heat::RandomString
+      properties:
+          length: 4
+          sequence: lowercase
+
+  mongo1_name:
+      type: OS::Heat::Value
+      depends_on: random_string1
+      properties:
+          value:
+              str_replace:
+                  template: dbaas-$prefix-$random
+                  params:
+                      $prefix: { get_param: stack_name }
+                      $random: { get_resource: random_string1 }
+
+  mongo2_name:
+      type: OS::Heat::Value
+      depends_on: random_string2
+      properties:
+          value:
+              str_replace:
+                  template: dbaas-$prefix-$random
+                  params:
+                      $prefix: { get_param: stack_name }
+                      $random: { get_resource: random_string2 }
+  mongo3_name:
+      type: OS::Heat::Value
+      depends_on: random_string3
+      properties:
+          value:
+              str_replace:
+                  template: dbaas-$prefix-$random
+                  params:
+                      $prefix: { get_param: stack_name }
+                      $random: { get_resource: random_string3 }
+
+  random_string_mongo:
+      type: OS::Heat::RandomString
+      properties:
+          length: 10
+          sequence: lowercase
+
+  random_string_sg:
+      type: OS::Heat::RandomString
+      properties:
+          length: 4
+          sequence: lowercase
+
+  security_group:
+      type: OS::Neutron::SecurityGroup
+      depends_on: random_string1
+      properties:
+          name:
+              str_replace:
+                  template: $prefix-$random
+                  params:
+                      $prefix: { get_param: stack_name }
+                      $random: { get_resource: random_string_sg }
+          rules:
+              - remote_mode: remote_group_id
+                direction: ingress
+              - remote_mode: remote_group_id
+                direction: egress
+              - direction: egress
+              - protocol: icmp
+              - port_range_min: 22
+                port_range_max: 22
+                protocol: tcp
+              - port_range_min: 27017
+                port_range_max: 27017
+                protocol: tcp
+
+  port1:
+      type: OS::Neutron::Port
+      depends_on: security_group
+      properties:
+          admin_state_up: true
+          network: { get_param: network_name }
+          fixed_ips:
+            - subnet_id: { get_param: subnet_name }
+          security_groups:
+            - { get_resource: security_group }
+  port2:
+      type: OS::Neutron::Port
+      depends_on: security_group
+      properties:
+          admin_state_up: true
+          network: { get_param: network_name }
+          fixed_ips:
+            - subnet_id: { get_param: subnet_name }
+          security_groups:
+            - { get_resource: security_group }
+  port3:
+      type: OS::Neutron::Port
+      depends_on: security_group
+      properties:
+          admin_state_up: true
+          network: { get_param: network_name }
+          fixed_ips:
+            - subnet_id: { get_param: subnet_name }
+          security_groups:
+            - { get_resource: security_group }
+
+  mongo1_floatingip:
+      type: OS::Neutron::FloatingIP
+      depends_on: port1
+      properties:
+          floating_network_id: { get_param: public_network_id }
+          port_id: { get_resource: port1 }
+
+  mongo2_floatingip:
+      type: OS::Neutron::FloatingIP
+      depends_on: port2
+      properties:
+          floating_network_id: { get_param: public_network_id }
+          port_id: { get_resource: port2 }
+
+  mongo3_floatingip:
+      type: OS::Neutron::FloatingIP
+      depends_on: port3
+      properties:
+          floating_network_id: { get_param: public_network_id }
+          port_id: { get_resource: port3 }
+          
+  mongo1_volume:
+      type: OS::Cinder::Volume
+      properties:
+          image: { get_param: image }
+          name: { get_attr: [mongo1_name, value] }
+          size: { get_param: volume_size }
+          volume_type: { get_param: volume_type }        
+  
+  mongo2_volume:
+      type: OS::Cinder::Volume
+      properties:
+          image: { get_param: image }
+          name: { get_attr: [mongo2_name, value] }
+          size: { get_param: volume_size }
+          volume_type: { get_param: volume_type }
+          
+  mongo3_volume:
+      type: OS::Cinder::Volume
+      properties:
+          image: { get_param: image }
+          name: { get_attr: [mongo3_name, value] }
+          size: { get_param: volume_size }
+          volume_type: { get_param: volume_type }     
+          
+  mongo1:
+    type: OS::Nova::Server
+    depends_on: [ port1, mongo2, mongo3 ]
+    properties:
+      name: { get_attr: [mongo1_name, value] }
+      flavor: { get_param: flavor }
+      key_name: { get_param: key }
+      availability_zone: { get_param: az1 }
+      block_device_mapping_v2:
+        - device_name: vda
+          volume_id: { get_resource: mongo1_volume }
+          delete_on_termination: True
+      networks:
+        - port: { get_resource: port1 }
+      user_data_format: RAW
+      metadata: { db_instance: true }
+      user_data:
+        str_replace:
+          params:
+            $key: { get_resource: random_string_mongo }
+            $proxy_host: { get_param: proxy_host }
+            $proxy_port: { get_param: proxy_port }
+            $db_pass: { get_param: db_pass }
+            $commandLog: { get_param: commandLog }
+            $isprodvm: { get_param: isprodvm}
+            $db: { get_param: custom_db }
+            $ip1: { get_attr: [mongo1_floatingip, floating_ip_address] }
+            $ip2: { get_attr: [mongo2_floatingip, floating_ip_address] }
+            $ip3: { get_attr: [mongo3_floatingip, floating_ip_address] }
+          template: |
+            #!/bin/bash
+            rm -rf /var/lib/apt/lists/lock
+            export http_proxy=http://$proxy_host:$proxy_port
+            export https_proxy=http://$proxy_host:$proxy_port
+
+            echo "export http_proxy=http://$proxy_host:$proxy_port" >> /etc/profile.d/proxy.sh
+            echo "export https_proxy=http://$proxy_host:$proxy_port" >> /etc/profile.d/proxy.sh
+
+            curl -o /etc/apt/sources.list https://raw.githubusercontent.com/Mohamedji/DBHeatTemplate/master/sources.list
+
+            apt-get update
+            # Snoopy install
+            if [ $commandLog = True ]
+            then
+               apt-get update -y
+               apt-get install libtool-bin -y
+               rm -f snoopy-install.sh
+               curl -L -o snoopy-install.sh https://github.com/a2o/snoopy/raw/install/doc/install/bin/snoopy-install.sh
+               chmod 755 snoopy-install.sh
+               ./snoopy-install.sh git-master
+               chmod -R 755 /var/log/auth.log
+               snoopy-enable
+            else
+              echo "snoopy not installed"
+            fi
+
+
+            # Installing Docker
+            apt-get install apt-transport-https ca-certificates curl software-properties-common -y
+            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
+            add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+            apt update
+            apt-get install docker-ce python-pip -y
+            pip install pymongo
+            mkdir -p /etc/systemd/system/docker.service.d/
+            cat << EOF > /etc/systemd/system/docker.service.d/proxy.conf
+            [Service]
+            Environment="HTTP_PROXY=http://$proxy_host:$proxy_port"
+            Environment="HTTPS_PROXY=http://$proxy_host:$proxy_port"
+            EOF
+            systemctl daemon-reload && systemctl restart docker
+            systemctl enable docker
+
+            mkdir /root/keys/
+            echo $key >> /root/keys/mongo-keyfile
+            chmod 400 /root/keys/mongo-keyfile
+            chown 999:999 /root/keys/mongo-keyfile
+
+            docker pull mongo:4.2.0
+            docker run --name mongo-node -d -v ~/mongo:/data/db -p 27017:27017 mongo:4.2.0 --replSet "rs0"
+            cat << EOF > /tmp/config.py
+
+            #!/usr/bin/python
+            import pymongo
+            import time
+            client = pymongo.MongoClient('mongodb://localhost:27017/')
+            config = {"_id":"rs0","members":[{"_id":0,"host": "$ip1:27017" },{"_id":1,"host": "$ip2:27017" },{"_id":2,"host": "$ip3:27017" }]}
+            client.admin.command("replSetInitiate", config)
+            time.sleep(20)
+            print client.admin.command("createUser", "root", pwd="$db_pass", roles=["root"])
+            print client.admin.command("createUser", "admin", pwd="@dmin", roles=["root"])
+            mydb = client.$db
+            item = { "Name" : "Test Record" }
+            record = mydb.item
+            print record.insert_one(item)
+            EOF
+            chmod +x /tmp/config.py
+            python /tmp/config.py >> /tmp/config_output
+            unset http_proxy https_proxy
+            docker -H $ip2 stop mongo-node
+            docker -H $ip3 stop mongo-node
+            docker stop mongo-node
+            docker -H $ip2 rm -f mongo-node
+            docker -H $ip3 rm -f mongo-node
+            docker rm -f mongo-node
+            docker run --name mongo-node --restart always  -d  -v ~/mongo:/data/db -v /root/keys/:/opt/mongo  -p 27017:27017 mongo --auth --keyFile /opt/mongo/mongo-keyfile --replSet "rs0"
+            sleep 2
+            docker -H $ip2 run --name mongo-node --restart always -d -v ~/mongo:/data/db -v /root/keys/:/opt/mongo  -p 27017:27017 mongo:4.2.0 --auth --keyFile /opt/mongo/mongo-keyfile --replSet "rs0"
+            docker -H $ip3 run --name mongo-node --restart always -d -v ~/mongo:/data/db -v /root/keys/:/opt/mongo  -p 27017:27017 mongo:4.2.0 --auth --keyFile /opt/mongo/mongo-keyfile --replSet "rs0"
+
+            export http_proxy=http://$proxy_host:$proxy_port
+            export https_proxy=http://$proxy_host:$proxy_port
+
+            # Installing Telegraf agent
+            curl -L -O https://dl.influxdata.com/telegraf/releases/telegraf_1.10.3-1_amd64.deb
+            dpkg -i telegraf_1.10.3-1_amd64.deb
+
+
+            # Telegraf Configuration
+            curl -L -o jq https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64
+            chmod +x ./jq
+            mv jq /usr/bin
+            echo "serverid=$(sudo curl GET  -s 'http://169.254.169.254/openstack/latest/meta_data.json' |jq -r '.uuid' )" >> /etc/default/telegraf
+
+            mv /etc/telegraf/telegraf.conf /etc/telegraf/telegraf-orig.conf
+            if [ $isprodvm = "non-prod" ]
+            then
+              curl -o /etc/telegraf/telegraf.conf https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/telegraf_nonprod.conf
+            else
+              curl -o /etc/telegraf/telegraf.conf https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/telegraf_prod.conf
+            fi
+            curl -o /etc/telegraf/longrunning.sh https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/longrunning.sh
+            curl -o /etc/telegraf/commands.sh https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/commands.sh
+
+
+            echo "[[inputs.mongodb]]" >> /etc/telegraf/telegraf.conf
+            echo "  servers = ['mongodb://admin:@dmin@localhost:27017']" >> /etc/telegraf/telegraf.conf
+            systemctl enable telegraf
+            systemctl restart telegraf
+
+  mongo2:
+    type: OS::Nova::Server
+    depends_on: port2
+    properties:
+      name: { get_attr: [mongo2_name, value] }
+      flavor: { get_param: flavor }
+      key_name: { get_param: key }
+      availability_zone: { get_param: az2 }
+      block_device_mapping_v2:
+        - device_name: vda
+          volume_id: { get_resource: mongo2_volume }
+          delete_on_termination: True
+      networks:
+        - port: { get_resource: port2 }
+      user_data_format: RAW
+      metadata: { db_instance: true }
+      user_data:
+        str_replace:
+          params:
+            $key: { get_resource: random_string_mongo }
+            $proxy_host: { get_param: proxy_host }
+            $proxy_port: { get_param: proxy_port }
+          template: |
+            #!/bin/bash
+            rm -rf /var/lib/apt/lists/lock
+            export http_proxy=http://$proxy_host:$proxy_port
+            export https_proxy=http://$proxy_host:$proxy_port
+
+            echo "export http_proxy=http://$proxy_host:$proxy_port" >> /etc/profile.d/proxy.sh
+            echo "export https_proxy=http://$proxy_host:$proxy_port" >> /etc/profile.d/proxy.sh
+
+            curl -o /etc/apt/sources.list https://raw.githubusercontent.com/Mohamedji/DBHeatTemplate/master/sources.list
+
+            apt-get update
+            # Snoopy install
+            if [ $commandLog = True ]
+            then
+               apt-get update -y
+               apt-get install libtool-bin -y
+               rm -f snoopy-install.sh
+               curl -L -o snoopy-install.sh https://github.com/a2o/snoopy/raw/install/doc/install/bin/snoopy-install.sh
+               chmod 755 snoopy-install.sh
+               ./snoopy-install.sh git-master
+               chmod -R 755 /var/log/auth.log
+               snoopy-enable
+            else
+              echo "snoopy not installed"
+            fi
+            # Installing Docker
+            apt-get install apt-transport-https ca-certificates curl software-properties-common -y
+            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
+            add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+            apt update
+            apt-get install docker-ce python-pip -y
+            pip install pymongo
+            mkdir -p /etc/systemd/system/docker.service.d/
+            cat << EOF > /etc/systemd/system/docker.service.d/proxy.conf
+            [Service]
+            Environment="HTTP_PROXY=http://$proxy_host:$proxy_port"
+            Environment="HTTPS_PROXY=http://$proxy_host:$proxy_port"
+            EOF
+            cat << EOF > /etc/systemd/system/docker.service.d/option.conf
+            [Service]
+            ExecStart=
+            ExecStart=/usr/bin/dockerd -H unix:// -H tcp://0.0.0.0:2375
+            EOF
+            systemctl daemon-reload && systemctl restart docker
+            systemctl enable docker
+
+            mkdir /root/keys/
+            echo $key >> /root/keys/mongo-keyfile
+            chmod 400 /root/keys/mongo-keyfile
+            chown 999:999 /root/keys/mongo-keyfile
+            docker pull mongo:4.2.0
+            docker run --name mongo-node -d -v /etc/hosts:/etc/hosts -v ~/mongo:/data/db -p 27017:27017 mongo:4.2.0  --replSet "rs0"
+
+
+            # Installing Telegraf agent
+            curl -L -O https://dl.influxdata.com/telegraf/releases/telegraf_1.10.3-1_amd64.deb
+            dpkg -i telegraf_1.10.3-1_amd64.deb
+
+
+            # Telegraf Configuration
+            curl -L -o jq https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64
+            chmod +x ./jq
+            mv jq /usr/bin
+            echo "serverid=$(sudo curl GET  -s 'http://169.254.169.254/openstack/latest/meta_data.json' |jq -r '.uuid' )" >> /etc/default/telegraf
+
+            mv /etc/telegraf/telegraf.conf /etc/telegraf/telegraf-orig.conf
+            if [ $isprodvm = "non-prod" ]
+            then
+              curl -o /etc/telegraf/telegraf.conf https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/telegraf_nonprod.conf
+            else
+              curl -o /etc/telegraf/telegraf.conf https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/telegraf_prod.conf
+            fi
+            curl -o /etc/telegraf/longrunning.sh https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/longrunning.sh
+            curl -o /etc/telegraf/commands.sh https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/commands.sh
+
+
+            echo "[[inputs.mongodb]]" >> /etc/telegraf/telegraf.conf
+            echo "  servers = ['mongodb://admin:@dmin@localhost:27017']" >> /etc/telegraf/telegraf.conf
+            systemctl enable telegraf
+            systemctl restart telegraf
+  mongo3:
+    type: OS::Nova::Server
+    depends_on: port3
+    properties:
+      name: { get_attr: [mongo3_name, value] }
+      flavor: { get_param: flavor }
+      key_name: { get_param: key }
+      availability_zone: { get_param: az3 }
+      block_device_mapping_v2:
+        - device_name: vda
+          volume_id: { get_resource: mongo3_volume }
+          delete_on_termination: True
+      networks:
+        - port: { get_resource: port3 }
+      user_data_format: RAW
+      metadata: { db_instance: true }
+      user_data:
+        str_replace:
+          params:
+            $key: { get_resource: random_string_mongo }
+            $proxy_host: { get_param: proxy_host }
+            $proxy_port: { get_param: proxy_port }
+          template: |
+            #!/bin/bash
+            rm -rf /var/lib/apt/lists/lock
+            export http_proxy=http://$proxy_host:$proxy_port
+            export https_proxy=http://$proxy_host:$proxy_port
+
+            echo "export http_proxy=http://$proxy_host:$proxy_port" >> /etc/profile.d/proxy.sh
+            echo "export https_proxy=http://$proxy_host:$proxy_port" >> /etc/profile.d/proxy.sh
+
+            curl -o /etc/apt/sources.list https://raw.githubusercontent.com/Mohamedji/DBHeatTemplate/master/sources.list
+
+            apt-get update
+            # Snoopy install
+            if [ $commandLog = True ]
+            then
+               apt-get update -y
+               apt-get install libtool-bin -y
+               rm -f snoopy-install.sh
+               curl -L -o snoopy-install.sh https://github.com/a2o/snoopy/raw/install/doc/install/bin/snoopy-install.sh
+               chmod 755 snoopy-install.sh
+               ./snoopy-install.sh git-master
+               chmod -R 755 /var/log/auth.log
+               snoopy-enable
+            else
+              echo "snoopy not installed"
+            fi
+            # Installing Docker
+            apt-get install apt-transport-https ca-certificates curl software-properties-common -y
+            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
+            add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+            apt update
+            apt-get install docker-ce python-pip -y
+            pip install pymongo
+            mkdir -p /etc/systemd/system/docker.service.d/
+            cat << EOF > /etc/systemd/system/docker.service.d/proxy.conf
+            [Service]
+            Environment="HTTP_PROXY=http://$proxy_host:$proxy_port"
+            Environment="HTTPS_PROXY=http://$proxy_host:$proxy_port"
+            EOF
+            cat << EOF > /etc/systemd/system/docker.service.d/option.conf
+            [Service]
+            ExecStart=
+            ExecStart=/usr/bin/dockerd -H unix:// -H tcp://0.0.0.0:2375
+            EOF
+            systemctl daemon-reload && systemctl restart docker
+            systemctl enable docker
+
+            mkdir /root/keys/
+            echo $key >> /root/keys/mongo-keyfile
+            chmod 400 /root/keys/mongo-keyfile
+            chown 999:999 /root/keys/mongo-keyfile
+            docker pull
+            docker run --name mongo-node -d -v /etc/hosts:/etc/hosts -v ~/mongo:/data/db -p 27017:27017 mongo:4.2.0 --replSet "rs0"
+
+            # Installing Telegraf agent
+            curl -L -O https://dl.influxdata.com/telegraf/releases/telegraf_1.10.3-1_amd64.deb
+            dpkg -i telegraf_1.10.3-1_amd64.deb
+
+
+            # Telegraf Configuration
+            curl -L -o jq https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64
+            chmod +x ./jq
+            mv jq /usr/bin
+            echo "serverid=$(sudo curl GET  -s 'http://169.254.169.254/openstack/latest/meta_data.json' |jq -r '.uuid' )" >> /etc/default/telegraf
+
+            mv /etc/telegraf/telegraf.conf /etc/telegraf/telegraf-orig.conf
+            if [ $isprodvm = "non-prod" ]
+            then
+              curl -o /etc/telegraf/telegraf.conf https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/telegraf_nonprod.conf
+            else
+              curl -o /etc/telegraf/telegraf.conf https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/telegraf_prod.conf
+            fi
+            curl -o /etc/telegraf/longrunning.sh https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/longrunning.sh
+            curl -o /etc/telegraf/commands.sh https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/commands.sh
+
+
+            echo "[[inputs.mongodb]]" >> /etc/telegraf/telegraf.conf
+            echo "  servers = ['mongodb://admin:@dmin@localhost:27017']" >> /etc/telegraf/telegraf.conf
+            systemctl enable telegraf
+            systemctl restart telegraf
+
+outputs:
+  db_engine: 
+    description: Database engine name
+    value: MongoDB
+  db_engine_version: 
+    description: Database Version
+    value: MongoDB v4.2.0
+  keypair: 
+    description: Keypair to connect to Database instances
+    value: { get_param: key }
+  flavor: 
+    description: Database instance flavor
+    value: { get_param: flavor }
+  network_name: 
+    description: Database network 
+    value: { get_param: network_name }
+  subnet_name: 
+    description: Database subnet
+    value: { get_param: subnet_name }
+  nodes_pubip: 
+    description: Database instance public ip
+    value:
+      str_replace:
+        template: $host1,$host2,$host3
+        params:
+          $host1: { get_attr: [mongo1_floatingip, floating_ip_address] }
+          $host2: { get_attr: [mongo2_floatingip, floating_ip_address] }
+          $host3: { get_attr: [mongo3_floatingip, floating_ip_address] }
+  nodes_pvtip: 
+    description: Database instance private ip
+    value:
+      str_replace:
+        template: $pvtip1,$pvtip2,$pvtip3
+        params:
+          $pvtip1: { get_attr: [port1, fixed_ips, 0, ip_address] }
+          $pvtip2: { get_attr: [port2, fixed_ips, 0, ip_address] }
+          $pvtip3: { get_attr: [port3, fixed_ips, 0, ip_address] }
+  connection_url:
+    description: MongoDB cluster connection url
+    value:
+      str_replace:
+        template: mongodb://root:$pass@$host1:27017,$host2:27017,$host3:27017/?replicaSet=rs0
+        params:
+          $pass: { get_param: db_pass }
+          $host1: { get_attr: [mongo1_floatingip, floating_ip_address] }
+          $host2: { get_attr: [mongo2_floatingip, floating_ip_address] }
+          $host3: { get_attr: [mongo3_floatingip, floating_ip_address] }
