@@ -264,7 +264,6 @@ resources:
             $db_pass: { get_param: db_pass }
             $commandLog: { get_param: commandLog }
             $isprodvm: { get_param: isprodvm}
-            $db: { get_param: custom_db }
             $ip1: { get_attr: [mongo1_floatingip, floating_ip_address] }
             $ip2: { get_attr: [mongo2_floatingip, floating_ip_address] }
             $ip3: { get_attr: [mongo3_floatingip, floating_ip_address] }
@@ -325,16 +324,13 @@ resources:
             import pymongo
             import time
             client = pymongo.MongoClient('mongodb://localhost:27017/')
-            config = {"_id":"rs0","members":[{"_id":0,"host": "$ip1:27017" },{"_id":1,"host": "$ip2:27017" },{"_id":2,"host": "$ip3:27017" }]}
+            config = {"_id":"rs0","members":[{"_id":0,"host": "$ip1:27017","priority": 30 },{"_id":1,"host": "$ip2:27017", "priority": 20 },{"_id":2,"host": "$ip3:27017", "priority": 10 }]}
             client.admin.command("replSetInitiate", config)
-            time.sleep(20)
+            time.sleep(60)
             print client.admin.command("createUser", "root", pwd="$db_pass", roles=["root"])
             print client.admin.command("createUser", "admin", pwd="@dmin", roles=["root"])
-            mydb = client.$db
-            item = { "Name" : "Test Record" }
-            record = mydb.item
-            print record.insert_one(item)
             EOF
+            
             chmod +x /tmp/config.py
             python /tmp/config.py >> /tmp/config_output
             unset http_proxy https_proxy
@@ -344,11 +340,13 @@ resources:
             docker -H $ip2 rm -f mongo-node
             docker -H $ip3 rm -f mongo-node
             docker rm -f mongo-node
-            docker run --name mongo-node --restart always  -d  -v ~/mongo:/data/db -v /root/keys/:/opt/mongo  -p 27017:27017 mongo --auth --keyFile /opt/mongo/mongo-keyfile --replSet "rs0"
-            sleep 2
+            docker run --name mongo-node --restart always  -d  -v ~/mongo:/data/db -v /root/keys/:/opt/mongo  -p 27017:27017 mongo:4.2.0 --auth --keyFile /opt/mongo/mongo-keyfile --replSet "rs0"
+
             docker -H $ip2 run --name mongo-node --restart always -d -v ~/mongo:/data/db -v /root/keys/:/opt/mongo  -p 27017:27017 mongo:4.2.0 --auth --keyFile /opt/mongo/mongo-keyfile --replSet "rs0"
             docker -H $ip3 run --name mongo-node --restart always -d -v ~/mongo:/data/db -v /root/keys/:/opt/mongo  -p 27017:27017 mongo:4.2.0 --auth --keyFile /opt/mongo/mongo-keyfile --replSet "rs0"
-
+            sleep 60
+            
+            
             export http_proxy=http://$proxy_host:$proxy_port
             export https_proxy=http://$proxy_host:$proxy_port
 
@@ -555,7 +553,7 @@ resources:
             echo $key >> /root/keys/mongo-keyfile
             chmod 400 /root/keys/mongo-keyfile
             chown 999:999 /root/keys/mongo-keyfile
-            docker pull
+            docker pull mongo:4.2.0 
             docker run --name mongo-node -d -v /etc/hosts:/etc/hosts -v ~/mongo:/data/db -p 27017:27017 mongo:4.2.0 --replSet "rs0"
 
             # Installing Telegraf agent
