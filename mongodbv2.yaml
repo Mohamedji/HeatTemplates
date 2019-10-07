@@ -155,12 +155,7 @@ resources:
       type: OS::Neutron::SecurityGroup
       depends_on: random_string1
       properties:
-          name:
-              str_replace:
-                  template: $prefix-$random
-                  params:
-                      $prefix: { get_param: stack_name }
-                      $random: { get_resource: random_string_sg }
+          name: { get_param: securityGroup }
           rules:
               - remote_mode: remote_group_id
                 direction: ingress
