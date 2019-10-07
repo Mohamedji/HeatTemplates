@@ -145,15 +145,8 @@ resources:
           length: 10
           sequence: lowercase
 
-  random_string_sg:
-      type: OS::Heat::RandomString
-      properties:
-          length: 4
-          sequence: lowercase
-
   security_group:
       type: OS::Neutron::SecurityGroup
-      depends_on: random_string1
       properties:
           name: { get_param: securityGroup }
           rules:
