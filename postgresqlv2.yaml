@@ -76,6 +76,19 @@ parameters:
     description: AZ to be used for node2
     default: JMNG-PE3-PROD3
 
+  sg_type:
+    type: string
+    default: default
+
+  securityGroup:
+    type: string
+    description: security group name
+
+
+conditions:
+  custom: {equals: [{get_param: sg_type}, "custom"]}
+  default: {equals: [{get_param: sg_type}, "default"]}
+  
 resources:
   random_string1:
     type: OS::Heat::RandomString
@@ -135,12 +148,7 @@ resources:
     type: OS::Neutron::SecurityGroup
     depends_on: random_string1
     properties:
-      name:
-        str_replace:
-          template: $prefix-$random
-          params:
-            $prefix: { get_param: stack_name }
-            $random: { get_resource: random_string_sg }
+      name: { get_param: securityGroup }
       rules:
         - remote_mode: remote_group_id
           direction: ingress
@@ -154,7 +162,8 @@ resources:
         - port_range_min: 5432
           port_range_max: 5432
           protocol: tcp
-
+    condition: default
+    
   port1:
     type: OS::Neutron::Port
     depends_on: security_group
@@ -164,7 +173,7 @@ resources:
       fixed_ips: 
         - subnet_id: { get_param: subnet_name }
       security_groups: 
-        - { get_resource: security_group }
+        - { if: ["custom", { get_param: securityGroup }, { get_resource: security_group } ] }
 
   port2:
     type: OS::Neutron::Port
@@ -175,7 +184,7 @@ resources:
       fixed_ips: 
         - subnet_id: { get_param: subnet_name }
       security_groups: 
-        - { get_resource: security_group }
+        - { if: ["custom", { get_param: securityGroup }, { get_resource: security_group } ] }
 
   port3:
     type: OS::Neutron::Port
@@ -186,7 +195,7 @@ resources:
       fixed_ips: 
         - subnet_id: { get_param: subnet_name }
       security_groups: 
-        - { get_resource: security_group }
+        - { if: ["custom", { get_param: securityGroup }, { get_resource: security_group } ] }
 
   postgres1_floatingip:
     type: OS::Neutron::FloatingIP
