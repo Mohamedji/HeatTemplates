@@ -101,7 +101,7 @@ resources:
       properties:
           value:
               str_replace:
-                  template: dbaas-$prefix-$random
+                  template: $prefix-$random
                   params:
                       $prefix: { get_param: stack_name }
                       $random: { get_resource: random_string1 }
@@ -112,7 +112,7 @@ resources:
       properties:
           value:
               str_replace:
-                  template: dbaas-$prefix-$random
+                  template: $prefix-$random
                   params:
                       $prefix: { get_param: stack_name }
                       $random: { get_resource: random_string2 }
@@ -122,7 +122,7 @@ resources:
       properties:
           value:
               str_replace:
-                  template: dbaas-$prefix-$random
+                  template: $prefix-$random
                   params:
                       $prefix: { get_param: stack_name }
                       $random: { get_resource: random_string3 }
