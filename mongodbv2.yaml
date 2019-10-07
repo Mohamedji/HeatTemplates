@@ -76,6 +76,18 @@ parameters:
     description: AZ to be used for node3
     default: JMNG-PE3-PROD3
     
+  sg_type:
+    type: string
+    default: default
+
+  securityGroup:
+    type: string
+    description: security group name
+
+conditions:
+  custom: {equals: [{get_param: sg_type}, "custom"]}
+  default: {equals: [{get_param: sg_type}, "default"]}
+  
 resources:
   random_string1:
       type: OS::Heat::RandomString
@@ -162,7 +174,8 @@ resources:
               - port_range_min: 27017
                 port_range_max: 27017
                 protocol: tcp
-
+      condition: default
+      
   port1:
       type: OS::Neutron::Port
       depends_on: security_group
@@ -172,7 +185,7 @@ resources:
           fixed_ips:
             - subnet_id: { get_param: subnet_name }
           security_groups:
-            - { get_resource: security_group }
+            - { if: ["custom", { get_param: securityGroup }, { get_resource: security_group } ] }
   port2:
       type: OS::Neutron::Port
       depends_on: security_group
@@ -182,7 +195,7 @@ resources:
           fixed_ips:
             - subnet_id: { get_param: subnet_name }
           security_groups:
-            - { get_resource: security_group }
+            - { if: ["custom", { get_param: securityGroup }, { get_resource: security_group } ] }
   port3:
       type: OS::Neutron::Port
       depends_on: security_group
@@ -192,7 +205,7 @@ resources:
           fixed_ips:
             - subnet_id: { get_param: subnet_name }
           security_groups:
-            - { get_resource: security_group }
+            - { if: ["custom", { get_param: securityGroup }, { get_resource: security_group } ] }
 
   mongo1_floatingip:
       type: OS::Neutron::FloatingIP
