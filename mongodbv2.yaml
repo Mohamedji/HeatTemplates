@@ -147,9 +147,9 @@ resources:
 
   security_group:
       type: OS::Neutron::SecurityGroup
-      description: Default security group created by JAWS console
       properties:
           name: { get_param: securityGroup }
+          description: Default security group created by JAWS console
           rules:
               - remote_mode: remote_group_id
                 direction: ingress
