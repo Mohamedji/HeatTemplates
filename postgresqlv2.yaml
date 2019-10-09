@@ -142,6 +142,7 @@ resources:
 
   security_group:
     type: OS::Neutron::SecurityGroup
+    description: Default security group created by JAWS console
     properties:
       name: { get_param: securityGroup }
       rules:
