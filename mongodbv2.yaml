@@ -83,6 +83,9 @@ parameters:
   securityGroup:
     type: string
     description: security group name
+  istelegrafon:
+    type: string
+    default: stop
 
 conditions:
   custom: {equals: [{get_param: sg_type}, "custom"]}
@@ -269,6 +272,7 @@ resources:
             $ip1: { get_attr: [mongo1_floatingip, floating_ip_address] }
             $ip2: { get_attr: [mongo2_floatingip, floating_ip_address] }
             $ip3: { get_attr: [mongo3_floatingip, floating_ip_address] }
+            $istelegrafon : { get_param: istelegrafon }
           template: |
             #!/bin/bash
             rm -rf /var/lib/apt/lists/lock
@@ -376,8 +380,13 @@ resources:
 
             echo "[[inputs.mongodb]]" >> /etc/telegraf/telegraf.conf
             echo "  servers = ['mongodb://admin:@dmin@localhost:27017']" >> /etc/telegraf/telegraf.conf
-            systemctl enable telegraf
-            systemctl restart telegraf
+            if [ $istelegrafon = "stop" ]
+            then
+              systemctl $istelegrafon telegraf
+            else
+              systemctl enable telegraf
+              systemctl $istelegrafon telegraf
+            fi
 
   mongo2:
     type: OS::Nova::Server
@@ -401,6 +410,7 @@ resources:
             $key: { get_resource: random_string_mongo }
             $proxy_host: { get_param: proxy_host }
             $proxy_port: { get_param: proxy_port }
+            $istelegrafon : { get_param: istelegrafon }
           template: |
             #!/bin/bash
             rm -rf /var/lib/apt/lists/lock
@@ -480,8 +490,13 @@ resources:
 
             echo "[[inputs.mongodb]]" >> /etc/telegraf/telegraf.conf
             echo "  servers = ['mongodb://admin:@dmin@localhost:27017']" >> /etc/telegraf/telegraf.conf
-            systemctl enable telegraf
-            systemctl restart telegraf
+            if [ $istelegrafon = "stop" ]
+            then
+              systemctl $istelegrafon telegraf
+            else
+              systemctl enable telegraf
+              systemctl $istelegrafon telegraf
+            fi
   mongo3:
     type: OS::Nova::Server
     depends_on: port3
@@ -504,6 +519,7 @@ resources:
             $key: { get_resource: random_string_mongo }
             $proxy_host: { get_param: proxy_host }
             $proxy_port: { get_param: proxy_port }
+            $istelegrafon : { get_param: istelegrafon }
           template: |
             #!/bin/bash
             rm -rf /var/lib/apt/lists/lock
@@ -582,8 +598,13 @@ resources:
 
             echo "[[inputs.mongodb]]" >> /etc/telegraf/telegraf.conf
             echo "  servers = ['mongodb://admin:@dmin@localhost:27017']" >> /etc/telegraf/telegraf.conf
-            systemctl enable telegraf
-            systemctl restart telegraf
+            if [ $istelegrafon = "stop" ]
+            then
+              systemctl $istelegrafon telegraf
+            else
+              systemctl enable telegraf
+              systemctl $istelegrafon telegraf
+            fi
 
 outputs:
   db_engine: 
