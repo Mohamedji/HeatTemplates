@@ -83,6 +83,10 @@ parameters:
   securityGroup:
     type: string
     description: security group name
+    
+  istelegrafon:
+    type: string
+    default: stop
 
 
 conditions:
@@ -259,6 +263,7 @@ resources:
             $db: { get_param: custom_db }
             $ip1: { get_attr: [ port1, fixed_ips, 0, ip_address ]}
             $ip2: { get_attr: [ port2, fixed_ips, 0, ip_address ]}
+            $istelegrafon : { get_param: istelegrafon }
           template: |
             #!/bin/bash
             echo "$ip1	postgres1" >> /etc/hosts
@@ -337,8 +342,13 @@ resources:
 
             echo "[[inputs.postgresql]]" >> /etc/telegraf/telegraf.conf
             echo "  address = 'postgres://postgres:$db_pass@localhost'" >> /etc/telegraf/telegraf.conf
-            systemctl enable telegraf
-            systemctl restart telegraf
+            if [ $istelegrafon = "stop" ]
+            then
+              systemctl $istelegrafon telegraf
+            else
+              systemctl enable telegraf
+              systemctl $istelegrafon telegraf
+            fi
 
 
 
@@ -370,6 +380,7 @@ resources:
             $db: { get_param: custom_db }
             $ip1: { get_attr: [ port1, fixed_ips, 0, ip_address ]}
             $ip2: { get_attr: [ port2, fixed_ips, 0, ip_address ]}
+            $istelegrafon : { get_param: istelegrafon }
           template: |
             #!/bin/bash
             echo "$ip1  postgres1" >> /etc/hosts
@@ -461,8 +472,13 @@ resources:
 
             echo "[[inputs.postgresql]]" >> /etc/telegraf/telegraf.conf
             echo "  address = 'postgres://postgres:$db_pass@localhost'" >> /etc/telegraf/telegraf.conf
-            systemctl enable telegraf
-            systemctl restart telegraf
+            if [ $istelegrafon = "stop" ]
+            then
+              systemctl $istelegrafon telegraf
+            else
+              systemctl enable telegraf
+              systemctl $istelegrafon telegraf
+            fi
 
   proxy:
     type: OS::Nova::Server
@@ -490,6 +506,7 @@ resources:
             $isprodvm: { get_param: isprodvm}
             $ip1: { get_attr: [ port1, fixed_ips, 0, ip_address ]}
             $ip2: { get_attr: [ port2, fixed_ips, 0, ip_address ]}
+            $istelegrafon : { get_param: istelegrafon }
           template: |
             #!/bin/bash
 
@@ -549,8 +566,13 @@ resources:
             curl -o /etc/telegraf/longrunning.sh https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/longrunning.sh
             curl -o /etc/telegraf/commands.sh https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/commands.sh
 
-            systemctl enable telegraf
-            systemctl restart telegraf
+            if [ $istelegrafon = "stop" ]
+            then
+              systemctl $istelegrafon telegraf
+            else
+              systemctl enable telegraf
+              systemctl $istelegrafon telegraf
+            fi
 
 outputs:
   db_engine: 
