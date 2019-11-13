@@ -84,6 +84,9 @@ parameters:
     type: string
     description: security group name
 
+  istelegrafon:
+    type: string
+    default: stop
 
 conditions:
   custom: {equals: [{get_param: sg_type}, "custom"]}
@@ -261,6 +264,7 @@ resources:
             $ip1: { get_attr: [port1, fixed_ips, 0, ip_address] }
             $ip2: { get_attr: [port2, fixed_ips, 0, ip_address] }
             $ip3: { get_attr: [port3, fixed_ips, 0, ip_address] }
+            $istelegrafon : { get_param: istelegrafon }
           template: |
             #!/bin/bash
             echo "$ip1  cassandra1" >> /etc/hosts
@@ -341,8 +345,13 @@ resources:
             curl -o /etc/telegraf/longrunning.sh https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/longrunning.sh
             curl -o /etc/telegraf/commands.sh https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/commands.sh
 
-            systemctl enable telegraf
-            systemctl restart telegraf
+            if [ $istelegrafon = "stop" ]
+            then
+              systemctl $istelegrafon telegraf
+            else
+              systemctl enable telegraf
+              systemctl $istelegrafon telegraf
+            fi
 
   cassandra2:
     type: OS::Nova::Server
@@ -448,8 +457,13 @@ resources:
             curl -o /etc/telegraf/commands.sh https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/commands.sh
 
 
-            systemctl enable telegraf
-            systemctl restart telegraf
+            if [ $istelegrafon = "stop" ]
+            then
+              systemctl $istelegrafon telegraf
+            else
+              systemctl enable telegraf
+              systemctl $istelegrafon telegraf
+            fi
 
   cassandra3:
     type: OS::Nova::Server
@@ -564,8 +578,13 @@ resources:
             curl -o /etc/telegraf/longrunning.sh https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/longrunning.sh
             curl -o /etc/telegraf/commands.sh https://raw.githubusercontent.com/mayankkapoor/statuscheck/test/commands.sh
 
-            systemctl enable telegraf
-            systemctl restart telegraf
+            if [ $istelegrafon = "stop" ]
+            then
+              systemctl $istelegrafon telegraf
+            else
+              systemctl enable telegraf
+              systemctl $istelegrafon telegraf
+            fi
 
 outputs:
   db_engine: 
