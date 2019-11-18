@@ -277,7 +277,7 @@ resources:
       properties:
           image: { get_param: image }
           name: { get_attr: [maria4_name, value] }
-          size: { get_param: volume_size }
+          size: 10
           volume_type: { get_param: volume_type }
   
   maria1:
