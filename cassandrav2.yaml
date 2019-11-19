@@ -436,7 +436,7 @@ resources:
             sed -i 's/master_ip/$ip1/g' /root/cassandra-config/cassandra.yaml
             sed -i 's/node_ip/$ip2/g' /root/cassandra-config/cassandra.yaml
             
-            docker run --restart always -d --name=cassandra2 --hostname=cassandra2 -v "/etc/hosts:/etc/hosts" -v "/root/cassandra-data:/var/lib/cassandra" -v "/root/cassandra-config/cassandra.yaml:/etc/cassandra/cassandra.yaml" -e "CASSANDRA_BROADCAST_ADDRESS=$ip2" -e "CASSANDRA_SEEDS=$ip1" -p 7000:7000 p 9042:9042 cassandra:3.11.4
+            docker run --restart always -d --name=cassandra2 --hostname=cassandra2 -v "/etc/hosts:/etc/hosts" -v "/root/cassandra-data:/var/lib/cassandra" -v "/root/cassandra-config/cassandra.yaml:/etc/cassandra/cassandra.yaml" -e "CASSANDRA_BROADCAST_ADDRESS=$ip2" -e "CASSANDRA_SEEDS=$ip1" -p 7000:7000 -p 9042:9042 cassandra:3.11.4
             
             # Installing Telegraf agent
             curl -L -O https://dl.influxdata.com/telegraf/releases/telegraf_1.10.3-1_amd64.deb
@@ -555,7 +555,7 @@ resources:
             sed -i 's/master_ip/$ip1/g' /root/cassandra-config/cassandra.yaml
             sed -i 's/node_ip/$ip3/g' /root/cassandra-config/cassandra.yaml
             
-            docker run --restart always -d --name=cassandra3 --hostname=cassandra3 -v "/etc/hosts:/etc/hosts" -v "/root/cassandra-data:/var/lib/cassandra" -v "/root/cassandra-config/cassandra.yaml:/etc/cassandra/cassandra.yaml" -e "CASSANDRA_BROADCAST_ADDRESS=$ip3" -e "CASSANDRA_SEEDS=$ip1" -p 7000:7000 p 9042:9042 cassandra:3.11.4
+            docker run --restart always -d --name=cassandra3 --hostname=cassandra3 -v "/etc/hosts:/etc/hosts" -v "/root/cassandra-data:/var/lib/cassandra" -v "/root/cassandra-config/cassandra.yaml:/etc/cassandra/cassandra.yaml" -e "CASSANDRA_BROADCAST_ADDRESS=$ip3" -e "CASSANDRA_SEEDS=$ip1" -p 7000:7000 -p 9042:9042 cassandra:3.11.4
             
             echo "sleeping now for 5 min"
             sleep 300
