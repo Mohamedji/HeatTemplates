@@ -321,7 +321,7 @@ resources:
             sed -i 's/master_ip/$ip1/g' /root/cassandra-config/cassandra.yaml
             sed -i 's/node_ip/$ip1/g' /root/cassandra-config/cassandra.yaml
             
-            docker run --restart always -d --name=cassandra1 --hostname=cassandra1 -v "/etc/hosts:/etc/hosts" -v "/root/cassandra-data:/var/lib/cassandra" -v "/root/cassandra-config/cassandra.yaml:/etc/cassandra/cassandra.yaml" -e "CASSANDRA_BROADCAST_ADDRESS=$ip1" -p 7000:7000 cassandra:3.11.4
+            docker run --restart always -d --name=cassandra1 --hostname=cassandra1 -v "/etc/hosts:/etc/hosts" -v "/root/cassandra-data:/var/lib/cassandra" -v "/root/cassandra-config/cassandra.yaml:/etc/cassandra/cassandra.yaml" -e "CASSANDRA_BROADCAST_ADDRESS=$ip1" -p 7000:7000  -p 9042:9042 cassandra:3.11.4
 
             
             export http_proxy=http://$proxy_host:$proxy_port
@@ -436,7 +436,7 @@ resources:
             sed -i 's/master_ip/$ip1/g' /root/cassandra-config/cassandra.yaml
             sed -i 's/node_ip/$ip2/g' /root/cassandra-config/cassandra.yaml
             
-            docker run --restart always -d --name=cassandra2 --hostname=cassandra2 -v "/etc/hosts:/etc/hosts" -v "/root/cassandra-data:/var/lib/cassandra" -v "/root/cassandra-config/cassandra.yaml:/etc/cassandra/cassandra.yaml" -e "CASSANDRA_BROADCAST_ADDRESS=$ip2" -e "CASSANDRA_SEEDS=$ip1" -p 7000:7000 cassandra:3.11.4
+            docker run --restart always -d --name=cassandra2 --hostname=cassandra2 -v "/etc/hosts:/etc/hosts" -v "/root/cassandra-data:/var/lib/cassandra" -v "/root/cassandra-config/cassandra.yaml:/etc/cassandra/cassandra.yaml" -e "CASSANDRA_BROADCAST_ADDRESS=$ip2" -e "CASSANDRA_SEEDS=$ip1" -p 7000:7000 p 9042:9042 cassandra:3.11.4
             
             # Installing Telegraf agent
             curl -L -O https://dl.influxdata.com/telegraf/releases/telegraf_1.10.3-1_amd64.deb
@@ -555,7 +555,7 @@ resources:
             sed -i 's/master_ip/$ip1/g' /root/cassandra-config/cassandra.yaml
             sed -i 's/node_ip/$ip3/g' /root/cassandra-config/cassandra.yaml
             
-            docker run --restart always -d --name=cassandra3 --hostname=cassandra3 -v "/etc/hosts:/etc/hosts" -v "/root/cassandra-data:/var/lib/cassandra" -v "/root/cassandra-config/cassandra.yaml:/etc/cassandra/cassandra.yaml" -e "CASSANDRA_BROADCAST_ADDRESS=$ip3" -e "CASSANDRA_SEEDS=$ip1" -p 7000:7000 cassandra:3.11.4
+            docker run --restart always -d --name=cassandra3 --hostname=cassandra3 -v "/etc/hosts:/etc/hosts" -v "/root/cassandra-data:/var/lib/cassandra" -v "/root/cassandra-config/cassandra.yaml:/etc/cassandra/cassandra.yaml" -e "CASSANDRA_BROADCAST_ADDRESS=$ip3" -e "CASSANDRA_SEEDS=$ip1" -p 7000:7000 p 9042:9042 cassandra:3.11.4
             
             echo "sleeping now for 5 min"
             sleep 300
@@ -630,7 +630,7 @@ outputs:
     description: Cassandra cluster connection url
     value:
       str_replace:
-        template: cassandra://cassandra:$pass@$host1:7000,$host2:7000,$host3:7000
+        template: cassandra://cassandra:$pass@$host1:9042,$host2:9042,$host3:9042
         params:
           $pass: { get_param: db_pass }
           $host1: { get_attr: [cassandra1_floatingip, floating_ip_address] }
