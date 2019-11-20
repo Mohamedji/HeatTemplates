@@ -255,6 +255,7 @@ resources:
       networks:
         - port: { get_resource: port1 }
       user_data_format: RAW
+      metadata: { db_instance: true }
       user_data:
         str_replace:
           params:
@@ -371,6 +372,7 @@ resources:
       networks:
         - port: { get_resource: port2 }
       user_data_format: RAW
+      metadata: { db_instance: true }
       user_data:
         str_replace:
           params:
@@ -483,6 +485,7 @@ resources:
       networks:
         - port: { get_resource: port3 }
       user_data_format: RAW
+      metadata: { db_instance: true }
       user_data:
         str_replace:
           params:
